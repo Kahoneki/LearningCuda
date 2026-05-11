@@ -19,6 +19,13 @@
 #define CC(call) CUDA_CHECK(call)
 
 
+struct Vertex
+{
+    float2 pos;
+    float3 color;
+};
+
+
 int main()
 {
     RenderDesc renderDesc{};
@@ -40,19 +47,19 @@ int main()
     //Create triangle data
     //Vertex buffer
     renderDesc.vertexBuffer.count = 4;
-    renderDesc.vertexBuffer.size = sizeof(float2);
-    renderDesc.vertexBuffer.stride = sizeof(float2);
-    float2* h_vb{ static_cast<float2*>(malloc(renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size)) };
-    h_vb[0] = float2(-0.5f, 0.5f);
-    h_vb[1] = float2(-0.5f, -0.5f);
-    h_vb[2] = float2(0.5f, 0.5f);
-    h_vb[3] = float2(0.5f, -0.5f);
-    CC(cudaMalloc(&renderDesc.vertexBuffer.d_data, renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size));
-    CC(cudaMemcpy(renderDesc.vertexBuffer.d_data, h_vb, renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size, cudaMemcpyHostToDevice));
+    renderDesc.vertexBuffer.size = sizeof(Vertex); // Size of one whole vertex
+    renderDesc.vertexBuffer.stride = sizeof(Vertex);
+    Vertex* h_vb{ static_cast<Vertex*>(malloc(renderDesc.vertexBuffer.count * sizeof(Vertex))) };
+    h_vb[0] = { float2(-0.5f,  0.5f), float3(1.0f, 0.0f, 0.0f) }; // Top Left (Red)
+    h_vb[1] = { float2(-0.5f, -0.5f), float3(0.0f, 1.0f, 0.0f) }; // Bottom Left (Green)
+    h_vb[2] = { float2( 0.5f,  0.5f), float3(0.0f, 0.0f, 1.0f) }; // Top Right (Blue)
+    h_vb[3] = { float2( 0.5f, -0.5f), float3(1.0f, 1.0f, 0.0f) }; // Bottom Right (Yellow)
+    CC(cudaMalloc(&renderDesc.vertexBuffer.d_data, renderDesc.vertexBuffer.count * sizeof(Vertex)));
+    CC(cudaMemcpy(renderDesc.vertexBuffer.d_data, h_vb, renderDesc.vertexBuffer.count * sizeof(Vertex), cudaMemcpyHostToDevice));
     renderDesc.vertexPositionAttributeIndex = 0;
     VertexLayout layout{};
-    layout.attributeCount = 1;
     layout.attributes[0] = { 0, AttributeFormat::FLOAT2 };
+    layout.attributes[1] = { sizeof(float2), AttributeFormat::FLOAT3 };
     renderDesc.vertexLayout = layout;
     
     //Index buffer (CW winding)
@@ -81,12 +88,12 @@ int main()
         }
         
         //Calculate kernel parameters
-        constexpr dim3 blockSize{ 16, 16 }; //256 threads
-        constexpr dim3 gridSize{ (width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y };
+        constexpr dim3 blockSize(16, 16);
+        const dim3 gridSize((renderDesc.surface.width + blockSize.x - 1) / blockSize.x, (renderDesc.surface.height + blockSize.y - 1) / blockSize.y);
         
         //Render
         Launch_kClearSurface(gridSize, blockSize, renderDesc.surface, { 160, 230, 255, 255 });
-        Launch_kRender(gridSize, blockSize, renderDesc);
+        Render(renderDesc);
         GlobalSynchronise();
         
         //Copy pixels from GPU to CPU

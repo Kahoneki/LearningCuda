@@ -95,7 +95,42 @@ void Launch_kClearSurface(const dim3 _gridSize, const dim3 _blockSize, const Sur
 
 
 
-__global__ void kRender(const RenderDesc& _desc)
+struct VertexShaderInput
+{
+    Buffer buffer;
+    VertexLayout layout;
+    std::size_t vertexIndex;
+};
+
+struct VertexShaderOutput
+{
+    float4 position;
+    float4 colour;
+};
+
+__global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsOut)
+{
+    const std::uint32_t vertexIndex{ threadIdx.x + blockIdx.x * blockDim.x };
+    if (vertexIndex >= _desc.vertexBuffer.count) { return; }
+
+    //Read attributes and write to the output buffer
+    d_vsOut[vertexIndex].position = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 0);
+    d_vsOut[vertexIndex].colour   = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 1);
+}
+
+
+
+__device__ uchar4 FragmentShader(const VertexShaderOutput& _input)
+{
+    const unsigned char r{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
+    const unsigned char g{ static_cast<unsigned char>(_input.colour.y * 255.0f) };
+    const unsigned char b{ static_cast<unsigned char>(_input.colour.z * 255.0f) };
+    return uchar4{ r, g, b, 255u };
+}
+
+
+
+__global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut)
 {
     //Calculate the X and Y coordinates of the pixel this thread handles
     const std::uint32_t x{ threadIdx.x + blockIdx.x * blockDim.x };
@@ -105,7 +140,7 @@ __global__ void kRender(const RenderDesc& _desc)
     //Calculate the 1D index into the pixel buffer
     const std::size_t idx{ y * _desc.surface.width + x };
     
-    //Calculate the UV coordinate in screen space (range [-1, 1])
+    //Calculate the UV coordinate in clip space (range [-1, 1])
     const float u{ (static_cast<float>(x) / static_cast<float>(_desc.surface.width) * 2.0f - 1.0f) };
     const float v{ (static_cast<float>(y) / static_cast<float>(_desc.surface.height) * 2.0f - 1.0f) };
     
@@ -113,18 +148,17 @@ __global__ void kRender(const RenderDesc& _desc)
     //Loop through all indices in the index buffer and shade triangles
     const float aspectRatio{ static_cast<float>(_desc.surface.width) / static_cast<float>(_desc.surface.height) };
     const float2 p{ u * aspectRatio, v };
+    
     for (std::size_t i{ 0 }; i < _desc.indexBuffer.count; i += 3)
     {
         //Get vertex positions
         const std::uint32_t idx0{ ReadIndex(_desc.indexBuffer, i + 0) };
         const std::uint32_t idx1{ ReadIndex(_desc.indexBuffer, i + 1) };
         const std::uint32_t idx2{ ReadIndex(_desc.indexBuffer, i + 2) };
-        const float4 v0_f4{ ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, idx0, _desc.vertexPositionAttributeIndex) };
-        const float4 v1_f4{ ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, idx1, _desc.vertexPositionAttributeIndex) };
-        const float4 v2_f4{ ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, idx2, _desc.vertexPositionAttributeIndex) };
-        const float2 v0{ v0_f4.x, v0_f4.y };
-        const float2 v1{ v1_f4.x, v1_f4.y };
-        const float2 v2{ v2_f4.x, v2_f4.y };
+        
+        const float2 v0{ _d_vsOut[idx0].position.x, _d_vsOut[idx0].position.y };
+        const float2 v1{ _d_vsOut[idx1].position.x, _d_vsOut[idx1].position.y };
+        const float2 v2{ _d_vsOut[idx2].position.x, _d_vsOut[idx2].position.y };
         
         //Calculate edge functions (2d cross products)
         const float e0{ (v1.x - v0.x) * (p.y - v0.y) - (v1.y - v0.y) * (p.x - v0.x) };
@@ -141,22 +175,41 @@ __global__ void kRender(const RenderDesc& _desc)
             const float w1{ e2 / area };
             const float w2{ e0 / area };
             
-            //Interpolate colour based on barycentric weights
-            const float r{ w0 * 255.0f };
-            const float g{ w1 * 255.0f };
-            const float b{ w2 * 255.0f };
+            //Barycentric interpolation
+            VertexShaderOutput interpolated;
+            interpolated.position.x = w0 * _d_vsOut[idx0].position.x + w1 * _d_vsOut[idx1].position.x + w2 * _d_vsOut[idx2].position.x;
+            interpolated.position.y = w0 * _d_vsOut[idx0].position.y + w1 * _d_vsOut[idx1].position.y + w2 * _d_vsOut[idx2].position.y;
+            interpolated.position.z = w0 * _d_vsOut[idx0].position.z + w1 * _d_vsOut[idx1].position.z + w2 * _d_vsOut[idx2].position.z;
+            interpolated.position.w = w0 * _d_vsOut[idx0].position.w + w1 * _d_vsOut[idx1].position.w + w2 * _d_vsOut[idx2].position.w;
+            interpolated.colour.x = w0 * _d_vsOut[idx0].colour.x + w1 * _d_vsOut[idx1].colour.x + w2 * _d_vsOut[idx2].colour.x;
+            interpolated.colour.y = w0 * _d_vsOut[idx0].colour.y + w1 * _d_vsOut[idx1].colour.y + w2 * _d_vsOut[idx2].colour.y;
+            interpolated.colour.z = w0 * _d_vsOut[idx0].colour.z + w1 * _d_vsOut[idx1].colour.z + w2 * _d_vsOut[idx2].colour.z;
+            interpolated.colour.w = w0 * _d_vsOut[idx0].colour.w + w1 * _d_vsOut[idx1].colour.w + w2 * _d_vsOut[idx2].colour.w;
             
-            _desc.surface.d_pixels[idx].z = static_cast<unsigned char>(r);
-            _desc.surface.d_pixels[idx].y = static_cast<unsigned char>(g);
-            _desc.surface.d_pixels[idx].x = static_cast<unsigned char>(b);
-            _desc.surface.d_pixels[idx].w = 255.0f;
+            _desc.surface.d_pixels[idx] = FragmentShader(interpolated);
         }
     }
 }
-void Launch_kRender(const dim3 _gridSize, const dim3 _blockSize, const RenderDesc& _desc)
+
+
+
+void Render(const RenderDesc& _desc)
 {
-    kRender<<<_gridSize, _blockSize>>>(_desc);
-    CheckLaunchKernelSuccess();
+    VertexShaderOutput* d_vsOut;
+    cudaMalloc(&d_vsOut, _desc.vertexBuffer.count * sizeof(VertexShaderOutput));
+    {
+        dim3 blockSize(256, 1, 1);
+        dim3 gridSize((_desc.vertexBuffer.count + blockSize.x - 1) / blockSize.x);
+        kVertexShader<<<gridSize, blockSize>>>(_desc, d_vsOut);
+        CheckLaunchKernelSuccess();
+    }
+    {
+        dim3 blockSize(16, 16);
+        dim3 gridSize((_desc.surface.width + blockSize.x - 1) / blockSize.x, (_desc.surface.height + blockSize.y - 1) / blockSize.y);
+        kRasterise<<<gridSize, blockSize>>>(_desc, d_vsOut);
+        CheckLaunchKernelSuccess();
+    }
+    cudaFree(d_vsOut);
 }
 
 

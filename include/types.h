@@ -51,7 +51,6 @@ struct VertexLayout
 {
     static constexpr AttrIndex_t MAX_ATTRIBUTES{ 4 };
     VertexAttributeDesc attributes[MAX_ATTRIBUTES]{};
-    AttrIndex_t attributeCount{ 0 };
 };
 
 

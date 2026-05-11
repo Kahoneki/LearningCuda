@@ -10,5 +10,5 @@
 
 
 void Launch_kClearSurface(dim3 _gridSize, dim3 _blockSize, Surface _surface, uchar4 _colour);
-void Launch_kRender(dim3 _gridSize, dim3 _blockSize, const RenderDesc& _desc);
+void Render(const RenderDesc& _desc);
 void GlobalSynchronise();
