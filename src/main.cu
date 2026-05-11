@@ -21,8 +21,8 @@
 
 struct Vertex
 {
-    float2 pos;
-    float3 color;
+    glm::vec3 pos;
+    glm::vec3 color;
 };
 
 
@@ -47,19 +47,19 @@ int main()
     //Create triangle data
     //Vertex buffer
     renderDesc.vertexBuffer.count = 4;
-    renderDesc.vertexBuffer.size = sizeof(Vertex); // Size of one whole vertex
+    renderDesc.vertexBuffer.size = sizeof(Vertex);
     renderDesc.vertexBuffer.stride = sizeof(Vertex);
     Vertex* h_vb{ static_cast<Vertex*>(malloc(renderDesc.vertexBuffer.count * sizeof(Vertex))) };
-    h_vb[0] = { float2(-0.5f,  0.5f), float3(1.0f, 0.0f, 0.0f) }; // Top Left (Red)
-    h_vb[1] = { float2(-0.5f, -0.5f), float3(0.0f, 1.0f, 0.0f) }; // Bottom Left (Green)
-    h_vb[2] = { float2( 0.5f,  0.5f), float3(0.0f, 0.0f, 1.0f) }; // Top Right (Blue)
-    h_vb[3] = { float2( 0.5f, -0.5f), float3(1.0f, 1.0f, 0.0f) }; // Bottom Right (Yellow)
+    h_vb[0] = { glm::vec3(-0.5f,  0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f) }; //Bottom left (red)
+    h_vb[1] = { glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) }; //Top left (green)
+    h_vb[2] = { glm::vec3( 0.5f,  0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) }; //Bottom right (blue)
+    h_vb[3] = { glm::vec3( 0.5f, -0.5f, 0.0f), glm::vec3(1.0f, 1.0f, 0.0f) }; //Top right (yellow)
     CC(cudaMalloc(&renderDesc.vertexBuffer.d_data, renderDesc.vertexBuffer.count * sizeof(Vertex)));
     CC(cudaMemcpy(renderDesc.vertexBuffer.d_data, h_vb, renderDesc.vertexBuffer.count * sizeof(Vertex), cudaMemcpyHostToDevice));
     renderDesc.vertexPositionAttributeIndex = 0;
     VertexLayout layout{};
-    layout.attributes[0] = { 0, AttributeFormat::FLOAT2 };
-    layout.attributes[1] = { sizeof(float2), AttributeFormat::FLOAT3 };
+    layout.attributes[0] = { 0, AttributeFormat::FLOAT3 };
+    layout.attributes[1] = { sizeof(glm::vec3), AttributeFormat::FLOAT3 };
     renderDesc.vertexLayout = layout;
     
     //Index buffer (CW winding)
@@ -77,6 +77,10 @@ int main()
     CC(cudaMemcpy(renderDesc.indexBuffer.d_data, h_ib, renderDesc.indexBuffer.count * renderDesc.indexBuffer.size, cudaMemcpyHostToDevice));
     
     
+    glm::vec3 position{ 0,0,0 };
+    float rotation{ 0.0f };
+    
+    
     //Main loop
     bool running{ true };
     SDL_Event e;
@@ -86,6 +90,16 @@ int main()
         {
             if (e.type == SDL_QUIT) { running = false; }
         }
+        
+        const float time{ static_cast<float>(SDL_GetPerformanceCounter()) / static_cast<float>(SDL_GetPerformanceFrequency()) };
+        constexpr float moveSpeed{ 4.0f };
+        constexpr float rotSpeed{ 90.0f };
+        glm::mat4 modelMat{ glm::mat4(1.0f) };
+        position.x = sin(moveSpeed * time) / 2.0f;
+        rotation = rotSpeed * time;
+        modelMat = glm::translate(modelMat, position);
+        modelMat = glm::rotate(modelMat, glm::radians(rotation), glm::vec3(0,0,1));
+        renderDesc.pushConstants.modelMatrix = modelMat;
         
         //Calculate kernel parameters
         constexpr dim3 blockSize(16, 16);

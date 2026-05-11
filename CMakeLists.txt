@@ -17,9 +17,10 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 # ---- Enable useful warnings ----
 add_compile_options(-Wall -Wextra -Wpedantic)
 
-# ---- FetchContent for SDL2 ----
+# ---- FetchContent for Dependencies ----
 include(FetchContent)
 
+# SDL2
 set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         SDL2
@@ -27,7 +28,14 @@ FetchContent_Declare(
         GIT_TAG        release-2.30.8   # pin a specific release
 )
 
-FetchContent_MakeAvailable(SDL2)
+# GLM
+FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG        1.0.1            # Use a recent stable release
+)
+
+FetchContent_MakeAvailable(SDL2 glm)
 
 # ---- Executable ----
 add_executable(my_cuda_app
@@ -47,10 +55,8 @@ find_package(CUDAToolkit REQUIRED)
 target_link_libraries(my_cuda_app
         PRIVATE
         CUDA::cudart
-        SDL2::SDL2          # SDL2 (static or shared depending on BUILD_SHARED_LIBS)
-        # SDL2::SDL2main    # uncomment on Windows if you use SDL_main
-        # CUDA::cublas
-        # CUDA::curand
+        SDL2::SDL2
+        glm::glm
 )
 
 # ---- SDL2 compile definitions (optional but recommended) ----
@@ -58,4 +64,5 @@ target_compile_definitions(my_cuda_app
         PRIVATE
         $<$<CONFIG:Debug>:_DEBUG>
         $<$<CONFIG:Release>:NDEBUG>
+        GLM_COMPILER=GLM_COMPILER_CUDA
 )

@@ -1,6 +1,7 @@
 #pragma once
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <cstdint>
-
 
 
 struct Surface
@@ -54,6 +55,12 @@ struct VertexLayout
 };
 
 
+struct PushConstants
+{
+    glm::mat4 modelMatrix;
+};
+
+
 struct RenderDesc
 {
     Surface surface;
@@ -62,4 +69,6 @@ struct RenderDesc
     VertexLayout vertexLayout;
     AttrIndex_t vertexPositionAttributeIndex;
     Buffer indexBuffer;
+    
+    PushConstants pushConstants;
 };

@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 
 
 #ifdef __CUDACC__

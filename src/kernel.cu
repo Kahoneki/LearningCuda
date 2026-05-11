@@ -39,7 +39,7 @@ __device__ std::uint32_t ReadIndex(const Buffer& _buffer, const std::size_t _ind
 
 
 
-__device__ float4 ReadVertexAttribute(const Buffer& _buffer, const VertexLayout& _layout, std::size_t _vertexIndex, std::size_t _attrIndex)
+__device__ glm::vec4 ReadVertexAttribute(const Buffer& _buffer, const VertexLayout& _layout, std::size_t _vertexIndex, std::size_t _attrIndex)
 {
     const unsigned char* bytes = static_cast<const unsigned char*>(_buffer.d_data);
     const std::size_t vertexByteOffset = _vertexIndex * _buffer.stride;
@@ -51,26 +51,26 @@ __device__ float4 ReadVertexAttribute(const Buffer& _buffer, const VertexLayout&
     case AttributeFormat::FLOAT:
     {
         const float v{ *reinterpret_cast<const float*>(attrPtr) };
-        return float4{ v, 0.0f, 0.0f, 0.0f };
+        return glm::vec4{ v, 0.0f, 0.0f, 0.0f };
     }
     case AttributeFormat::FLOAT2:
     {
-        const float2& v{ *reinterpret_cast<const float2*>(attrPtr) };
-        return float4{ v.x, v.y, 0.0f, 0.0f };
+        const glm::vec2& v{ *reinterpret_cast<const glm::vec2*>(attrPtr) };
+        return glm::vec4{ v.x, v.y, 0.0f, 0.0f };
     }
     case AttributeFormat::FLOAT3:
     {
         const float* f{ reinterpret_cast<const float*>(attrPtr) };
-        return float4{ f[0], f[1], f[2], 0.0f };
+        return glm::vec4{ f[0], f[1], f[2], 0.0f };
     }
     case AttributeFormat::FLOAT4:
     {
-        return *reinterpret_cast<const float4*>(attrPtr);
+        return *reinterpret_cast<const glm::vec4*>(attrPtr);
     }
     default:
         //std::cerr << "All formats in _desc.vertexLayout.attributes must be in {FLOAT, FLOAT2, FLOAT3, FLOAT4}. Format = " << static_cast<std::underlying_type_t<AttributeFormat>>(_layout.attributes[_attrIndex].format) << std::endl;
         //exit(-1);
-        return float4(0,0,0,0);
+        return glm::vec4(0,0,0,0);
     }
 }
 
@@ -104,8 +104,8 @@ struct VertexShaderInput
 
 struct VertexShaderOutput
 {
-    float4 position;
-    float4 colour;
+    glm::vec4 position;
+    glm::vec4 colour;
 };
 
 __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsOut)
@@ -114,13 +114,15 @@ __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsO
     if (vertexIndex >= _desc.vertexBuffer.count) { return; }
 
     //Read attributes and write to the output buffer
-    d_vsOut[vertexIndex].position = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 0);
-    d_vsOut[vertexIndex].colour   = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 1);
+    glm::vec4 pos{ ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 0) };
+    pos.w = 1.0f;
+    d_vsOut[vertexIndex].position = _desc.pushConstants.modelMatrix * pos;
+    d_vsOut[vertexIndex].colour = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 1);
 }
 
 
 
-__device__ uchar4 FragmentShader(const VertexShaderOutput& _input)
+__device__ uchar4 FragmentShader(const RenderDesc& _desc, const VertexShaderOutput& _input)
 {
     const unsigned char r{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
     const unsigned char g{ static_cast<unsigned char>(_input.colour.y * 255.0f) };
@@ -186,7 +188,7 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
             interpolated.colour.z = w0 * _d_vsOut[idx0].colour.z + w1 * _d_vsOut[idx1].colour.z + w2 * _d_vsOut[idx2].colour.z;
             interpolated.colour.w = w0 * _d_vsOut[idx0].colour.w + w1 * _d_vsOut[idx1].colour.w + w2 * _d_vsOut[idx2].colour.w;
             
-            _desc.surface.d_pixels[idx] = FragmentShader(interpolated);
+            _desc.surface.d_pixels[idx] = FragmentShader(_desc, interpolated);
         }
     }
 }
