@@ -1,14 +1,45 @@
+#include "types.h"
 #include "kernel.h"
 #include <cstdint>
 #include <iostream>
 
 
-__global__ void RenderKernel(uchar4* const _pixels, const std::uint32_t _width, const std::uint32_t _height, const float2* const _d_vb, const std::uint32_t* const _d_ib, const std::uint32_t _numIndices)
+void CheckLaunchKernelSuccess()
+{
+    const cudaError_t err{ cudaGetLastError() };
+    if (err != cudaSuccess)
+    {
+        std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+        exit(err);
+    }
+}
+
+
+
+__global__ void kClearSurface(const Surface* const _d_surface, const uchar4 _colour)
+{
+    const std::uint32_t x{ threadIdx.x + blockIdx.x * blockDim.x };
+    const std::uint32_t y{ threadIdx.y + blockIdx.y * blockDim.y };
+    if (x >= _d_surface->width || y >= _d_surface->height) { return; }
+    const std::size_t idx{ y * _d_surface->width + x };
+    _d_surface->pixels[idx].z = _colour.x; //R
+    _d_surface->pixels[idx].y = _colour.y; //G
+    _d_surface->pixels[idx].x = _colour.z; //B
+    _d_surface->pixels[idx].w = _colour.w; //A
+}
+void Launch_kClearSurface(const dim3 _gridSize, const dim3 _blockSize, const Surface* const _d_surface, const uchar4 _colour)
+{
+    kClearSurface<<<_gridSize, _blockSize>>>(_d_surface, _colour);
+    CheckLaunchKernelSuccess();
+}
+
+
+
+__global__ void kRender(const Surface* const _surface, const std::uint32_t _width, const std::uint32_t _height, const float2* const _d_vb, const std::uint32_t* const _d_ib, const std::uint32_t _numIndices)
 {
     //Calculate the X and Y coordinates of the pixel this thread handles
     const std::uint32_t x{ threadIdx.x + blockIdx.x * blockDim.x };
     const std::uint32_t y{ threadIdx.y + blockIdx.y * blockDim.y };
-    
     if (x >= _width || y >= _height) { return; }
     
     //Calculate the 1D index into the pixel buffer
@@ -18,11 +49,10 @@ __global__ void RenderKernel(uchar4* const _pixels, const std::uint32_t _width, 
     const float u{ (static_cast<float>(x) / static_cast<float>(_width) * 2.0f - 1.0f) };
     const float v{ (static_cast<float>(y) / static_cast<float>(_height)) * 2.0f - 1.0f };
     
-    const float aspectRatio{ static_cast<float>(_width) / static_cast<float>(_height) };
-    const float2 p{ u * aspectRatio, v };
     
     //Loop through all triangles in the vertex buffer and shade
-    bool shaded{ false };
+    const float aspectRatio{ static_cast<float>(_width) / static_cast<float>(_height) };
+    const float2 p{ u * aspectRatio, v };
     for (std::size_t i{ 0 }; i < _numIndices; i += 3)
     {
         //Calculate edge functions (2d cross products)
@@ -45,33 +75,22 @@ __global__ void RenderKernel(uchar4* const _pixels, const std::uint32_t _width, 
             const float g{ w1 * 255.0f };
             const float b{ w2 * 255.0f };
             
-            _pixels[idx].z = static_cast<unsigned char>(r);
-            _pixels[idx].y = static_cast<unsigned char>(g);
-            _pixels[idx].x = static_cast<unsigned char>(b);
-            _pixels[idx].w = 255.0f;
-            
-            shaded = true;
+            _surface->pixels[idx].z = static_cast<unsigned char>(r);
+            _surface->pixels[idx].y = static_cast<unsigned char>(g);
+            _surface->pixels[idx].x = static_cast<unsigned char>(b);
+            _surface->pixels[idx].w = 255.0f;
         }
     }
-    if (!shaded)
-    {
-        //Background colour (light blue)
-        _pixels[idx].z = 160u;
-        _pixels[idx].y = 230u;
-        _pixels[idx].x = 255u;
-        _pixels[idx].w = 255u;
-    }
+}
+void Launch_kRender(const dim3 _gridSize, const dim3 _blockSize, const Surface* const _surface, const std::uint32_t _width, const std::uint32_t _height, const float2* const _d_vb, const std::uint32_t* const _d_ib, const std::uint32_t _numIndices)
+{
+    kRender<<<_gridSize, _blockSize>>>(_surface, _width, _height, _d_vb, _d_ib, _numIndices);
+    CheckLaunchKernelSuccess();
 }
 
 
-void Launch_RenderKernel(const dim3 _gridSize, const dim3 _blockSize, uchar4* const _pixels, const std::uint32_t _width, const std::uint32_t _height, const float2* const _d_vb, const std::uint32_t* const _d_ib, const std::uint32_t _numIndices)
+
+void GlobalSynchronise()
 {
-    RenderKernel<<<_gridSize, _blockSize>>>(_pixels, _width, _height, _d_vb, _d_ib, _numIndices);
-    
-    const cudaError_t err{ cudaGetLastError() };
-    if (err != cudaSuccess)
-    {
-        std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
-    }
     cudaDeviceSynchronize();
 }

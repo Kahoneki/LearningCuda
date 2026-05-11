@@ -1,6 +1,8 @@
+#include "types.h"
 #include "kernel.h"
 #include <SDL2/SDL.h>
 #include <iostream>
+
 
 
 #define CUDA_CHECK(call)                                                                                                    \
@@ -23,12 +25,13 @@ int main()
     constexpr int width{ 1920 };
     constexpr int height{ 1080 };
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window{ SDL_CreateWindow("CUDA Software Rasteriser", 3840, SDL_WINDOWPOS_CENTERED, width, height, 0) };
-    SDL_Surface* surface{ SDL_GetWindowSurface(window) };
+    SDL_Window* const window{ SDL_CreateWindow("CUDA Software Rasteriser", 3840, SDL_WINDOWPOS_CENTERED, width, height, 0) };
+    SDL_Surface* const sdlSurface{ SDL_GetWindowSurface(window) };
     
     //Allocate pixel buffer
     uchar4* d_pixels;
     CC(cudaMalloc(&d_pixels, width * height * sizeof(uchar4)));
+    const Surface surface{ width, height, d_pixels };
     
     
     //Create triangle data
@@ -65,23 +68,30 @@ int main()
             if (e.type == SDL_QUIT) { running = false; }
         }
         
-        //Launch the kernel
+        //Calculate kernel parameters
         constexpr dim3 blockSize{ 16, 16 }; //256 threads
         constexpr dim3 gridSize{ (width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y };
-        Launch_RenderKernel(gridSize, blockSize, d_pixels, width, height, d_vb, d_ib, 6);
+        
+        //Render
+        Launch_kClearSurface(gridSize, blockSize, &surface, { 160, 230, 255, 255 });
+        GlobalSynchronise();
+        Launch_kRender(gridSize, blockSize, &surface, width, height, d_vb, d_ib, 6);
         
         //Copy pixels from GPU to CPU
         //Lock the surface so SDL doesn't overwrite it while we write
-        SDL_LockSurface(surface);
-        CC(cudaMemcpy(surface->pixels, d_pixels, width * height * sizeof(uchar4), cudaMemcpyDeviceToHost));
-        SDL_UnlockSurface(surface);
+        SDL_LockSurface(sdlSurface);
+        CC(cudaMemcpy(sdlSurface->pixels, d_pixels, width * height * sizeof(uchar4), cudaMemcpyDeviceToHost));
+        SDL_UnlockSurface(sdlSurface);
         
         //Push CPU pixels to the monitor
         SDL_UpdateWindowSurface(window);
     }
     
+    
     //Cleanup
     CC(cudaFree(d_pixels));
+    free(h_vb);
+    free(h_ib);
     SDL_DestroyWindow(window);
     SDL_Quit();
     
