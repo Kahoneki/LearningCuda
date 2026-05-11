@@ -6,8 +6,6 @@ project(MyCudaProject
 )
 
 # ---- CUDA Architecture Settings ----
-# Use "native" to auto-detect your GPU's architecture (CMake 3.24+)
-# Or hardcode: sm_75, sm_80, sm_86, sm_89, sm_90, etc.
 set(CMAKE_CUDA_ARCHITECTURES "native")
 
 # ---- C++ Standard ----
@@ -18,6 +16,18 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 # ---- Enable useful warnings ----
 add_compile_options(-Wall -Wextra -Wpedantic)
+
+# ---- FetchContent for SDL2 ----
+include(FetchContent)
+
+set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        SDL2
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG        release-2.30.8   # pin a specific release
+)
+
+FetchContent_MakeAvailable(SDL2)
 
 # ---- Executable ----
 add_executable(my_cuda_app
@@ -31,11 +41,21 @@ target_include_directories(my_cuda_app
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# ---- Link CUDA libraries (add as needed) ----
+# ---- Link libraries ----
 find_package(CUDAToolkit REQUIRED)
+
 target_link_libraries(my_cuda_app
         PRIVATE
         CUDA::cudart
-        # CUDA::cublas    # uncomment if needed
-        # CUDA::curand    # uncomment if needed
+        SDL2::SDL2          # SDL2 (static or shared depending on BUILD_SHARED_LIBS)
+        # SDL2::SDL2main    # uncomment on Windows if you use SDL_main
+        # CUDA::cublas
+        # CUDA::curand
+)
+
+# ---- SDL2 compile definitions (optional but recommended) ----
+target_compile_definitions(my_cuda_app
+        PRIVATE
+        $<$<CONFIG:Debug>:_DEBUG>
+        $<$<CONFIG:Release>:NDEBUG>
 )

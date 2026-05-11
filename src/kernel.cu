@@ -3,26 +3,28 @@
 #include <iostream>
 
 
-__global__ void vector_add_kernel(const float* _a, const float* _b, float* _c, const std::uint32_t _n)
+__global__ void RenderKernel(uchar4* const _pixels, const std::uint32_t _width, const std::uint32_t _height)
 {
-    const std::uint32_t idx{ threadIdx.x + blockIdx.x * blockDim.x };
-    if (idx < _n)
-    {
-        for (std::size_t i{ 0 }; i < 30000; ++i)
-        {
-            _c[idx] = _a[idx] + _b[idx];
-        }
-    }
+    //Calculate the X and Y coordinates of the pixel this thread handles
+    const std::uint32_t x{ threadIdx.x + blockIdx.x * blockDim.x };
+    const std::uint32_t y{ threadIdx.y + blockIdx.y * blockDim.y };
+    
+    if (x >= _width || y >= _height) { return; }
+    
+    //Calculate the 1D index into the pixel buffer
+    const std::size_t idx{ y * _width + x };
+    
+    //rasteriser will go here eventually
+    _pixels[idx].z = static_cast<unsigned char>(x * 255 / _width); //Red
+    _pixels[idx].y = static_cast<unsigned char>(y * 255 / _height); //Green
+    _pixels[idx].x = 0u; //Blue
+    _pixels[idx].w = 255u; //Alpha
 }
 
 
-
-void launch_vector_add(const float* _a, const float* _b, float* _c, const std::uint32_t _n)
+void Launch_RenderKernel(const dim3 _gridSize, const dim3 _blockSize, uchar4* const _pixels, const std::uint32_t _width, const std::uint32_t _height)
 {
-    constexpr std::uint32_t threads_per_block{ 256 };
-    std::uint32_t blocks{ (_n + threads_per_block - 1) / threads_per_block };
-    
-    vector_add_kernel<<<blocks, threads_per_block>>>(_a,_b,_c,_n);
+    RenderKernel<<<_gridSize, _blockSize>>>(_pixels, _width, _height);
     
     const cudaError_t err{ cudaGetLastError() };
     if (err != cudaSuccess)

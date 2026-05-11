@@ -7,4 +7,4 @@
 #define CUDA_CALLABLE
 #endif
 
-void launch_vector_add(const float* _a, const float* _b, float* _c, std::uint32_t _n);
+void Launch_RenderKernel(dim3 _gridSize, dim3 _blockSize, uchar4* _pixels, std::uint32_t _width, std::uint32_t _height);
