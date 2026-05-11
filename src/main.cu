@@ -32,19 +32,27 @@ int main()
     
     
     //Create triangle data
-    float2* h_vb{ static_cast<float2*>(malloc(6 * sizeof(float2))) };
+    //Vertex buffer
+    float2* h_vb{ static_cast<float2*>(malloc(4 * sizeof(float2))) };
     h_vb[0] = float2(-0.5f, 0.5f);
     h_vb[1] = float2(-0.5f, -0.5f);
     h_vb[2] = float2(0.5f, 0.5f);
-    
-    h_vb[3] = float2(0.5f, 0.5f);
-    h_vb[4] = float2(-0.5f, -0.5f);
-    h_vb[5] = float2(0.5f, -0.5f);
-    
-    
+    h_vb[3] = float2(0.5f, -0.5f);
     float2* d_vb;
-    CC(cudaMalloc(&d_vb, 6 * sizeof(float2)));
-    CC(cudaMemcpy(d_vb, h_vb, 6 * sizeof(float2), cudaMemcpyHostToDevice));
+    CC(cudaMalloc(&d_vb, 4 * sizeof(float2)));
+    CC(cudaMemcpy(d_vb, h_vb, 4 * sizeof(float2), cudaMemcpyHostToDevice));
+    
+    //Index buffer (CW winding)
+    std::uint32_t* h_ib{ static_cast<std::uint32_t*>(malloc(6 * sizeof(std::uint32_t))) };
+    h_ib[0] = 0;
+    h_ib[1] = 1;
+    h_ib[2] = 2;
+    h_ib[3] = 2;
+    h_ib[4] = 1;
+    h_ib[5] = 3;
+    std::uint32_t* d_ib;
+    CC(cudaMalloc(&d_ib, 6 * sizeof(std::uint32_t)));
+    CC(cudaMemcpy(d_ib, h_ib, 6 * sizeof(std::uint32_t), cudaMemcpyHostToDevice));
     
     
     //Main loop
@@ -60,7 +68,7 @@ int main()
         //Launch the kernel
         constexpr dim3 blockSize{ 16, 16 }; //256 threads
         constexpr dim3 gridSize{ (width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y };
-        Launch_RenderKernel(gridSize, blockSize, d_pixels, width, height, d_vb);
+        Launch_RenderKernel(gridSize, blockSize, d_pixels, width, height, d_vb, d_ib, 6);
         
         //Copy pixels from GPU to CPU
         //Lock the surface so SDL doesn't overwrite it while we write
