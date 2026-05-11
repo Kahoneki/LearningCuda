@@ -27,7 +27,29 @@ __global__ void RenderKernel(uchar4* const _pixels, const std::uint32_t _width, 
     //Point is inside triangle if all edge functions are >= 0 (CW winding)
     if (e0 >= 0 && e1 >= 0 && e2 >= 0)
     {
-        _pixels[idx].z = 255u;
+        //Calculate barycentric coordinates
+        const float area{ e0 + e1 + e2 }; //area of the triangle
+        const float w0{ e1 / area };
+        const float w1{ e2 / area };
+        const float w2{ e0 / area };
+        
+        //Interpolate colour based on barycentric weights
+        const float r{ w0 * 255.0f };
+        const float g{ w1 * 255.0f };
+        const float b{ w2 * 255.0f };
+        
+        _pixels[idx].z = static_cast<unsigned char>(r);
+        _pixels[idx].y = static_cast<unsigned char>(g);
+        _pixels[idx].x = static_cast<unsigned char>(b);
+        _pixels[idx].w = 255.0f;
+    }
+    else
+    {
+        //Background colour (light blue)
+        _pixels[idx].z = 160u;
+        _pixels[idx].y = 230u;
+        _pixels[idx].x = 255u;
+        _pixels[idx].w = 255u;
     }
 }
 

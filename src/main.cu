@@ -23,7 +23,7 @@ int main()
     constexpr int width{ 1920 };
     constexpr int height{ 1080 };
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window{ SDL_CreateWindow("CUDA Software Rasteriser", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, 0) };
+    SDL_Window* window{ SDL_CreateWindow("CUDA Software Rasteriser", 3840, SDL_WINDOWPOS_CENTERED, width, height, 0) };
     SDL_Surface* surface{ SDL_GetWindowSurface(window) };
     
     //Allocate pixel buffer
@@ -32,9 +32,9 @@ int main()
     
     //Create triangle data
     float2* h_tri{ static_cast<float2*>(malloc(3 * sizeof(float2))) };
-    h_tri[0] = float2(-0.5f, -0.5f);
-    h_tri[1] = float2(0.5f, -0.5f);
-    h_tri[2] = float2(0.0f, 0.5f);
+    h_tri[0] = float2(-0.5f, 0.5f);
+    h_tri[1] = float2(0.0f, -0.5f);
+    h_tri[2] = float2(0.5f, 0.5f);
     float2* d_tri;
     CC(cudaMalloc(&d_tri, 3 * sizeof(float2)));
     CC(cudaMemcpy(d_tri, h_tri, 3 * sizeof(float2), cudaMemcpyHostToDevice));
