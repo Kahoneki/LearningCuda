@@ -30,14 +30,21 @@ int main()
     uchar4* d_pixels;
     CC(cudaMalloc(&d_pixels, width * height * sizeof(uchar4)));
     
+    
     //Create triangle data
-    float2* h_tri{ static_cast<float2*>(malloc(3 * sizeof(float2))) };
-    h_tri[0] = float2(-0.5f, 0.5f);
-    h_tri[1] = float2(0.0f, -0.5f);
-    h_tri[2] = float2(0.5f, 0.5f);
-    float2* d_tri;
-    CC(cudaMalloc(&d_tri, 3 * sizeof(float2)));
-    CC(cudaMemcpy(d_tri, h_tri, 3 * sizeof(float2), cudaMemcpyHostToDevice));
+    float2* h_vb{ static_cast<float2*>(malloc(6 * sizeof(float2))) };
+    h_vb[0] = float2(-0.5f, 0.5f);
+    h_vb[1] = float2(-0.5f, -0.5f);
+    h_vb[2] = float2(0.5f, 0.5f);
+    
+    h_vb[3] = float2(0.5f, 0.5f);
+    h_vb[4] = float2(-0.5f, -0.5f);
+    h_vb[5] = float2(0.5f, -0.5f);
+    
+    
+    float2* d_vb;
+    CC(cudaMalloc(&d_vb, 6 * sizeof(float2)));
+    CC(cudaMemcpy(d_vb, h_vb, 6 * sizeof(float2), cudaMemcpyHostToDevice));
     
     
     //Main loop
@@ -53,7 +60,7 @@ int main()
         //Launch the kernel
         constexpr dim3 blockSize{ 16, 16 }; //256 threads
         constexpr dim3 gridSize{ (width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y };
-        Launch_RenderKernel(gridSize, blockSize, d_pixels, width, height, d_tri);
+        Launch_RenderKernel(gridSize, blockSize, d_pixels, width, height, d_vb);
         
         //Copy pixels from GPU to CPU
         //Lock the surface so SDL doesn't overwrite it while we write
