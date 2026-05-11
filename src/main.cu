@@ -12,7 +12,7 @@
         if (err != cudaSuccess)                                                                                             \
         {                                                                                                                   \
             std::cerr << "CUDA error at " << __FILE__ << ':' << __LINE__ << " - " << cudaGetErrorString(err) << std::endl;  \
-            exit(EXIT_FAILURE);                                                                                             \
+            exit(err);                                                                                                      \
         }                                                                                                                   \
     } while (0)
 
@@ -21,6 +21,9 @@
 
 int main()
 {
+    RenderDesc renderDesc{};
+    
+    
     //Initialise SDL window and surface
     constexpr int width{ 1920 };
     constexpr int height{ 1080 };
@@ -31,31 +34,40 @@ int main()
     //Allocate pixel buffer
     uchar4* d_pixels;
     CC(cudaMalloc(&d_pixels, width * height * sizeof(uchar4)));
-    const Surface surface{ width, height, d_pixels };
+    renderDesc.surface = { width, height, d_pixels };
     
     
     //Create triangle data
     //Vertex buffer
-    float2* h_vb{ static_cast<float2*>(malloc(4 * sizeof(float2))) };
+    renderDesc.vertexBuffer.count = 4;
+    renderDesc.vertexBuffer.size = sizeof(float2);
+    renderDesc.vertexBuffer.stride = sizeof(float2);
+    float2* h_vb{ static_cast<float2*>(malloc(renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size)) };
     h_vb[0] = float2(-0.5f, 0.5f);
     h_vb[1] = float2(-0.5f, -0.5f);
     h_vb[2] = float2(0.5f, 0.5f);
     h_vb[3] = float2(0.5f, -0.5f);
-    float2* d_vb;
-    CC(cudaMalloc(&d_vb, 4 * sizeof(float2)));
-    CC(cudaMemcpy(d_vb, h_vb, 4 * sizeof(float2), cudaMemcpyHostToDevice));
+    CC(cudaMalloc(&renderDesc.vertexBuffer.d_data, renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size));
+    CC(cudaMemcpy(renderDesc.vertexBuffer.d_data, h_vb, renderDesc.vertexBuffer.count * renderDesc.vertexBuffer.size, cudaMemcpyHostToDevice));
+    renderDesc.vertexPositionAttributeIndex = 0;
+    VertexLayout layout{};
+    layout.attributeCount = 1;
+    layout.attributes[0] = { 0, AttributeFormat::FLOAT2 };
+    renderDesc.vertexLayout = layout;
     
     //Index buffer (CW winding)
-    std::uint32_t* h_ib{ static_cast<std::uint32_t*>(malloc(6 * sizeof(std::uint32_t))) };
+    renderDesc.indexBuffer.count = 6;
+    renderDesc.indexBuffer.size = sizeof(std::uint32_t);
+    renderDesc.indexBuffer.stride = sizeof(std::uint32_t);
+    std::uint32_t* h_ib{ static_cast<std::uint32_t*>(malloc(renderDesc.indexBuffer.count * renderDesc.indexBuffer.size)) };
     h_ib[0] = 0;
     h_ib[1] = 1;
     h_ib[2] = 2;
     h_ib[3] = 2;
     h_ib[4] = 1;
     h_ib[5] = 3;
-    std::uint32_t* d_ib;
-    CC(cudaMalloc(&d_ib, 6 * sizeof(std::uint32_t)));
-    CC(cudaMemcpy(d_ib, h_ib, 6 * sizeof(std::uint32_t), cudaMemcpyHostToDevice));
+    CC(cudaMalloc(&renderDesc.indexBuffer.d_data, renderDesc.indexBuffer.count * renderDesc.indexBuffer.size));
+    CC(cudaMemcpy(renderDesc.indexBuffer.d_data, h_ib, renderDesc.indexBuffer.count * renderDesc.indexBuffer.size, cudaMemcpyHostToDevice));
     
     
     //Main loop
@@ -73,9 +85,9 @@ int main()
         constexpr dim3 gridSize{ (width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y };
         
         //Render
-        Launch_kClearSurface(gridSize, blockSize, &surface, { 160, 230, 255, 255 });
+        Launch_kClearSurface(gridSize, blockSize, renderDesc.surface, { 160, 230, 255, 255 });
+        Launch_kRender(gridSize, blockSize, renderDesc);
         GlobalSynchronise();
-        Launch_kRender(gridSize, blockSize, &surface, width, height, d_vb, d_ib, 6);
         
         //Copy pixels from GPU to CPU
         //Lock the surface so SDL doesn't overwrite it while we write
