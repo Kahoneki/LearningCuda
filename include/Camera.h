@@ -1,12 +1,13 @@
 #pragma once
 
+#define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <SDL2/SDL.h>
 
 class Camera
 {
 public:
-    Camera(float _fov, float _aspect, float _near, float _far, const glm::vec3& _position = glm::vec3(0.0f, 0.0f, 3.0f));
+    Camera(float _fov, float _aspect, float _near, float _far, const glm::vec3& _position = glm::vec3(0.0f, 0.0f, -3.0f));
 
     // Call this in your SDL event loop
     void HandleEvent(const SDL_Event& e);

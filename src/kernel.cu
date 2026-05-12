@@ -124,9 +124,9 @@ __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsO
 
 __device__ uchar4 FragmentShader(const RenderDesc& _desc, const VertexShaderOutput& _input)
 {
-    const unsigned char r{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
+    const unsigned char r{ static_cast<unsigned char>(_input.colour.z * 255.0f) };
     const unsigned char g{ static_cast<unsigned char>(_input.colour.y * 255.0f) };
-    const unsigned char b{ static_cast<unsigned char>(_input.colour.z * 255.0f) };
+    const unsigned char b{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
     return uchar4{ r, g, b, 255u };
 }
 
@@ -144,7 +144,7 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
     
     //Calculate the UV coordinate in clip space (range [-1, 1])
     const float u{ (static_cast<float>(x) / static_cast<float>(_desc.surface.width) * 2.0f - 1.0f) };
-    const float v{ (static_cast<float>(y) / static_cast<float>(_desc.surface.height) * 2.0f - 1.0f) };
+    const float v{ (1.0f - static_cast<float>(y) / static_cast<float>(_desc.surface.height) * 2.0f) };
     
     
     //Loop through all indices in the index buffer and shade triangles
@@ -171,8 +171,8 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
         const float e1{ (v2.x - v1.x) * (p.y - v1.y) - (v2.y - v1.y) * (p.x - v1.x) };
         const float e2{ (v0.x - v2.x) * (p.y - v2.y) - (v0.y - v2.y) * (p.x - v2.x) };
         
-        //Point is inside triangle if all edge functions are >= 0 (CW winding)
-        if (e0 >= 0 && e1 >= 0 && e2 >= 0)
+        //Point is inside triangle if all edge functions are <= 0 (CW winding)
+        if (e0 <= 0 && e1 <= 0 && e2 <= 0)
         {
             //Calculate barycentric coordinates
             const float area{ e0 + e1 + e2 }; //area of the triangle

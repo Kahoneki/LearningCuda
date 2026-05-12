@@ -51,13 +51,13 @@ int main()
     renderDesc.vertexBuffer.stride = sizeof(Vertex);
     Vertex h_vb[24]
     {
-        //--- Front Face (Z = +0.5) - Red ---
+        //--- Forwards Face (Z = +0.5) - Red ---
         { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //0
         { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //1
         { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //2
         { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //3
 
-        //--- Back Face (Z = -0.5) - Green ---
+        //--- Backwards Face (Z = -0.5) - Green ---
         { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //4
         { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //5
         { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //6
@@ -145,11 +145,11 @@ int main()
         }
         camera.Update(dt);
         
-        position.x = sin(moveSpeed * totalTime) / 2.0f;
+        // position.x = sin(moveSpeed * totalTime) / 2.0f;
         rotation = rotSpeed * totalTime;
         glm::mat4 modelMat{ glm::mat4(1.0f) };
-        modelMat = glm::translate(modelMat, position);
-        modelMat = glm::rotate(modelMat, glm::radians(rotation), glm::vec3(1,1,1));
+        modelMat = glm::translate(modelMat, { position.x + 3.0f, position.y, position.z });
+        // modelMat = glm::rotate(modelMat, glm::radians(rotation), glm::vec3(1,1,1));
         renderDesc.pushConstants.modelMatrix = modelMat;
         renderDesc.pushConstants.viewProjMatrix = camera.GetProjMatrix() * camera.GetViewMatrix();
         
@@ -159,6 +159,10 @@ int main()
         
         //Render
         Launch_kClearSurface(gridSize, blockSize, renderDesc.surface, { 160, 230, 255, 255 });
+        Render(renderDesc);
+        modelMat = glm::translate(modelMat, { position.x, position.y, position.z + 3.0f });
+        modelMat = glm::rotate(modelMat, glm::radians(90.0f), glm::vec3(0,1,0));
+        renderDesc.pushConstants.modelMatrix = modelMat;
         Render(renderDesc);
         GlobalSynchronise();
         

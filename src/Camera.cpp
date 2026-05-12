@@ -3,7 +3,7 @@
 
 Camera::Camera(float _fov, float _aspect, float _near, float _far, const glm::vec3& _position)
     : m_fov(_fov), m_aspect(_aspect), m_near(_near), m_far(_far), m_position(_position),
-      m_yaw(-90.0f), m_pitch(0.0f), m_speed(3.0f), m_sensitivity(0.1f), m_isLooking(false)
+      m_yaw(90.0f), m_pitch(0.0f), m_speed(3.0f), m_sensitivity(0.1f), m_isLooking(false)
 {
     m_worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
     UpdateMatrices();
@@ -24,8 +24,8 @@ void Camera::HandleEvent(const SDL_Event& e)
     else if (e.type == SDL_MOUSEMOTION && m_isLooking)
     {
         // e.motion.xrel and yrel are the change in mouse position since last frame
-        m_yaw += e.motion.xrel * m_sensitivity;
-        m_pitch += e.motion.yrel * m_sensitivity;
+        m_yaw -= e.motion.xrel * m_sensitivity;
+        m_pitch -= e.motion.yrel * m_sensitivity;
 
         // Clamp pitch to prevent flipping the camera upside down
         if (m_pitch > 89.0f) m_pitch = 89.0f;
@@ -76,8 +76,8 @@ void Camera::UpdateMatrices()
     m_front = glm::normalize(front);
 
     // 2. Calculate the Right and Up vectors
-    m_right = glm::normalize(glm::cross(m_front, m_worldUp));
-    m_up = glm::normalize(glm::cross(m_right, m_front));
+    m_right = glm::normalize(glm::cross(m_worldUp, m_front));
+    m_up    = glm::normalize(glm::cross(m_front, m_right));
 
     // 3. Update Matrices
     m_viewMat = glm::lookAt(m_position, m_position + m_front, m_up);
