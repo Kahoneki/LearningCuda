@@ -116,7 +116,7 @@ __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsO
     //Read attributes and write to the output buffer
     glm::vec4 pos{ ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 0) };
     pos.w = 1.0f;
-    d_vsOut[vertexIndex].position = _desc.pushConstants.modelMatrix * pos;
+    d_vsOut[vertexIndex].position = _desc.pushConstants.viewProjMatrix * _desc.pushConstants.modelMatrix * pos;
     d_vsOut[vertexIndex].colour = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 1);
 }
 
@@ -158,9 +158,14 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
         const std::uint32_t idx1{ ReadIndex(_desc.indexBuffer, i + 1) };
         const std::uint32_t idx2{ ReadIndex(_desc.indexBuffer, i + 2) };
         
-        const float2 v0{ _d_vsOut[idx0].position.x, _d_vsOut[idx0].position.y };
-        const float2 v1{ _d_vsOut[idx1].position.x, _d_vsOut[idx1].position.y };
-        const float2 v2{ _d_vsOut[idx2].position.x, _d_vsOut[idx2].position.y };
+        const float w0{ _d_vsOut[idx0].position.w };
+        const float w1{ _d_vsOut[idx1].position.w };
+        const float w2{ _d_vsOut[idx2].position.w };
+        if (w0 == 0.0f || w1 == 0.0f || w2 == 0.0f) { continue; }
+        
+        const float2 v0{ _d_vsOut[idx0].position.x / w0, _d_vsOut[idx0].position.y / w0 };
+        const float2 v1{ _d_vsOut[idx1].position.x / w1, _d_vsOut[idx1].position.y / w1 };
+        const float2 v2{ _d_vsOut[idx2].position.x / w2, _d_vsOut[idx2].position.y / w2 };
         
         //Calculate edge functions (2d cross products)
         const float e0{ (v1.x - v0.x) * (p.y - v0.y) - (v1.y - v0.y) * (p.x - v0.x) };
@@ -172,21 +177,21 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
         {
             //Calculate barycentric coordinates
             const float area{ e0 + e1 + e2 }; //area of the triangle
-            if (area == 0.0f) { return; }
-            const float w0{ e1 / area };
-            const float w1{ e2 / area };
-            const float w2{ e0 / area };
+            if (area == 0.0f) { continue; }
+            const float w0_bary{ e1 / area };
+            const float w1_bary{ e2 / area };
+            const float w2_bary{ e0 / area };
             
             //Barycentric interpolation
             VertexShaderOutput interpolated;
-            interpolated.position.x = w0 * _d_vsOut[idx0].position.x + w1 * _d_vsOut[idx1].position.x + w2 * _d_vsOut[idx2].position.x;
-            interpolated.position.y = w0 * _d_vsOut[idx0].position.y + w1 * _d_vsOut[idx1].position.y + w2 * _d_vsOut[idx2].position.y;
-            interpolated.position.z = w0 * _d_vsOut[idx0].position.z + w1 * _d_vsOut[idx1].position.z + w2 * _d_vsOut[idx2].position.z;
-            interpolated.position.w = w0 * _d_vsOut[idx0].position.w + w1 * _d_vsOut[idx1].position.w + w2 * _d_vsOut[idx2].position.w;
-            interpolated.colour.x = w0 * _d_vsOut[idx0].colour.x + w1 * _d_vsOut[idx1].colour.x + w2 * _d_vsOut[idx2].colour.x;
-            interpolated.colour.y = w0 * _d_vsOut[idx0].colour.y + w1 * _d_vsOut[idx1].colour.y + w2 * _d_vsOut[idx2].colour.y;
-            interpolated.colour.z = w0 * _d_vsOut[idx0].colour.z + w1 * _d_vsOut[idx1].colour.z + w2 * _d_vsOut[idx2].colour.z;
-            interpolated.colour.w = w0 * _d_vsOut[idx0].colour.w + w1 * _d_vsOut[idx1].colour.w + w2 * _d_vsOut[idx2].colour.w;
+            interpolated.position.x = w0_bary * _d_vsOut[idx0].position.x + w1_bary * _d_vsOut[idx1].position.x + w2_bary * _d_vsOut[idx2].position.x;
+            interpolated.position.y = w0_bary * _d_vsOut[idx0].position.y + w1_bary * _d_vsOut[idx1].position.y + w2_bary * _d_vsOut[idx2].position.y;
+            interpolated.position.z = w0_bary * _d_vsOut[idx0].position.z + w1_bary * _d_vsOut[idx1].position.z + w2_bary * _d_vsOut[idx2].position.z;
+            interpolated.position.w = 1.0f;
+            interpolated.colour.x = w0_bary * _d_vsOut[idx0].colour.x + w1_bary * _d_vsOut[idx1].colour.x + w2_bary * _d_vsOut[idx2].colour.x;
+            interpolated.colour.y = w0_bary * _d_vsOut[idx0].colour.y + w1_bary * _d_vsOut[idx1].colour.y + w2_bary * _d_vsOut[idx2].colour.y;
+            interpolated.colour.z = w0_bary * _d_vsOut[idx0].colour.z + w1_bary * _d_vsOut[idx1].colour.z + w2_bary * _d_vsOut[idx2].colour.z;
+            interpolated.colour.w = w0_bary * _d_vsOut[idx0].colour.w + w1_bary * _d_vsOut[idx1].colour.w + w2_bary * _d_vsOut[idx2].colour.w;
             
             _desc.surface.d_pixels[idx] = FragmentShader(_desc, interpolated);
         }

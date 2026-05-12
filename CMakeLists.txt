@@ -41,6 +41,7 @@ FetchContent_MakeAvailable(SDL2 glm)
 add_executable(my_cuda_app
         src/main.cu
         src/kernel.cu
+        src/Camera.cpp
 )
 
 # ---- Include directories ----

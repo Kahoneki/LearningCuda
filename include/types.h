@@ -58,6 +58,7 @@ struct VertexLayout
 struct PushConstants
 {
     glm::mat4 modelMatrix;
+    glm::mat4 viewProjMatrix;
 };
 
 
