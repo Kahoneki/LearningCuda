@@ -8,6 +8,6 @@
 #endif
 
 
-void Launch_kClearSurface(dim3 _gridSize, dim3 _blockSize, Surface _surface, uchar4 _colour);
+void Launch_kClearSurfaceAndDepthBuffer(dim3 _gridSize, dim3 _blockSize, const Surface& _surface, const Buffer& _depthBuffer, uchar4 _colour, float _depthValue);
 void Render(const RenderDesc& _desc);
 void GlobalSynchronise();

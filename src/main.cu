@@ -44,6 +44,15 @@ int main()
     renderDesc.surface = { width, height, d_pixels };
     
     
+    //Allocate depth buffer
+    float* d_depthBufferData;
+    CC(cudaMalloc(&d_depthBufferData, width * height * sizeof(float)));
+    renderDesc.depthBuffer.d_data = d_depthBufferData;
+    renderDesc.depthBuffer.count = width * height;
+    renderDesc.depthBuffer.size = sizeof(float);
+    renderDesc.depthBuffer.stride = sizeof(float);
+    
+    
     //Create triangle data
     //Vertex buffer
     renderDesc.vertexBuffer.count = 24;
@@ -158,7 +167,7 @@ int main()
         const dim3 gridSize((renderDesc.surface.width + blockSize.x - 1) / blockSize.x, (renderDesc.surface.height + blockSize.y - 1) / blockSize.y);
         
         //Render
-        Launch_kClearSurface(gridSize, blockSize, renderDesc.surface, { 160, 230, 255, 255 });
+        Launch_kClearSurfaceAndDepthBuffer(gridSize, blockSize, renderDesc.surface, renderDesc.depthBuffer, { 160, 230, 255, 255 }, 1.0f);
         Render(renderDesc);
         modelMat = glm::translate(modelMat, { position.x, position.y, position.z + 3.0f });
         modelMat = glm::rotate(modelMat, glm::radians(90.0f), glm::vec3(0,1,0));
@@ -178,6 +187,10 @@ int main()
     
     
     //Cleanup
+    CC(cudaFree(d_pixels));
+    CC(cudaFree(renderDesc.depthBuffer.d_data));
+    CC(cudaFree(renderDesc.vertexBuffer.d_data));
+    CC(cudaFree(renderDesc.indexBuffer.d_data));
     CC(cudaFree(d_pixels));
     SDL_DestroyWindow(window);
     SDL_Quit();

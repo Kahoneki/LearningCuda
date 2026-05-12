@@ -16,25 +16,45 @@ void CheckLaunchKernelSuccess()
 
 
 
-__device__ std::uint32_t ReadIndex(const Buffer& _buffer, const std::size_t _index)
+__device__ std::uint32_t ReadBufferUint(const Buffer& _buffer, const std::size_t _index)
 {
     const unsigned char* bytes{ static_cast<const unsigned char*>(_buffer.d_data) };
     const std::size_t byteOffset{ _index * _buffer.stride };
-    if (_buffer.size == 1) //8-bit indices
+    if (_buffer.size == 1) //8-bit uint
     {
         return static_cast<std::uint32_t>(*reinterpret_cast<const std::uint8_t*>(bytes + byteOffset));
     }
-    if (_buffer.size == 2) //16-bit indices
+    if (_buffer.size == 2) //16-bit uint
     {
         return static_cast<std::uint32_t>(*reinterpret_cast<const std::uint16_t*>(bytes + byteOffset));
     }
-    if (_buffer.size == 4) //32-bit indices
+    if (_buffer.size == 4) //32-bit uint
     {
         return *reinterpret_cast<const std::uint32_t*>(bytes + byteOffset);
     }
-    //std::cerr << "_desc.indexBuffer.size must be in {1, 2, 4}. Size = " << _buffer.size << std::endl;
-    //exit(-1);
     return 0u;
+}
+
+
+
+__device__ float ReadBufferFloat(const Buffer& _buffer, const std::size_t _index)
+{
+    const unsigned char* bytes{ static_cast<const unsigned char*>(_buffer.d_data) };
+    const std::size_t byteOffset{ _index * _buffer.stride };
+    if (_buffer.size == 4) //32-bit float
+    {
+        return *reinterpret_cast<const float*>(bytes + byteOffset);
+    }
+    return 0u;
+}
+__device__ void WriteBufferFloat(const Buffer& _buffer, const std::size_t _index, const float _val)
+{
+    unsigned char* bytes{ static_cast<unsigned char*>(_buffer.d_data) };
+    const std::size_t byteOffset{ _index * _buffer.stride };
+    if (_buffer.size == 4) //32-bit float
+    {
+        *reinterpret_cast<float*>(bytes + byteOffset) = _val;
+    }
 }
 
 
@@ -76,20 +96,23 @@ __device__ glm::vec4 ReadVertexAttribute(const Buffer& _buffer, const VertexLayo
 
 
 
-__global__ void kClearSurface(const Surface _surface, const uchar4 _colour)
+__global__ void kClearSurfaceAndDepthBuffer(const Surface& _surface, const Buffer& _depthBuffer, const uchar4 _colour, const float _depthValue)
 {
     const std::uint32_t x{ threadIdx.x + blockIdx.x * blockDim.x };
     const std::uint32_t y{ threadIdx.y + blockIdx.y * blockDim.y };
     if (x >= _surface.width || y >= _surface.height) { return; }
     const std::size_t idx{ y * _surface.width + x };
+    
     _surface.d_pixels[idx].z = _colour.x; //R
     _surface.d_pixels[idx].y = _colour.y; //G
     _surface.d_pixels[idx].x = _colour.z; //B
     _surface.d_pixels[idx].w = _colour.w; //A
+    
+    WriteBufferFloat(_depthBuffer, idx, _depthValue);
 }
-void Launch_kClearSurface(const dim3 _gridSize, const dim3 _blockSize, const Surface _surface, const uchar4 _colour)
+void Launch_kClearSurfaceAndDepthBuffer(const dim3 _gridSize, const dim3 _blockSize, const Surface& _surface, const Buffer& _depthBuffer, const uchar4 _colour, const float _depthValue)
 {
-    kClearSurface<<<_gridSize, _blockSize>>>(_surface, _colour);
+    kClearSurfaceAndDepthBuffer<<<_gridSize, _blockSize>>>(_surface, _depthBuffer, _colour, _depthValue);
     CheckLaunchKernelSuccess();
 }
 
@@ -153,18 +176,18 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
     for (std::size_t i{ 0 }; i < _desc.indexBuffer.count; i += 3)
     {
         //Get vertex positions
-        const std::uint32_t idx0{ ReadIndex(_desc.indexBuffer, i + 0) };
-        const std::uint32_t idx1{ ReadIndex(_desc.indexBuffer, i + 1) };
-        const std::uint32_t idx2{ ReadIndex(_desc.indexBuffer, i + 2) };
+        const std::uint32_t idx0{ ReadBufferUint(_desc.indexBuffer, i + 0) };
+        const std::uint32_t idx1{ ReadBufferUint(_desc.indexBuffer, i + 1) };
+        const std::uint32_t idx2{ ReadBufferUint(_desc.indexBuffer, i + 2) };
         
         const float w0{ _d_vsOut[idx0].position.w };
         const float w1{ _d_vsOut[idx1].position.w };
         const float w2{ _d_vsOut[idx2].position.w };
         if (w0 <= 0.0f || w1 <= 0.0f || w2 <= 0.0f) { continue; }
         
-        const float2 v0{ _d_vsOut[idx0].position.x / w0, _d_vsOut[idx0].position.y / w0 };
-        const float2 v1{ _d_vsOut[idx1].position.x / w1, _d_vsOut[idx1].position.y / w1 };
-        const float2 v2{ _d_vsOut[idx2].position.x / w2, _d_vsOut[idx2].position.y / w2 };
+        const float3 v0{ _d_vsOut[idx0].position.x / w0, _d_vsOut[idx0].position.y / w0, _d_vsOut[idx0].position.z / w0 };
+        const float3 v1{ _d_vsOut[idx1].position.x / w1, _d_vsOut[idx1].position.y / w1, _d_vsOut[idx1].position.z / w1 };
+        const float3 v2{ _d_vsOut[idx2].position.x / w2, _d_vsOut[idx2].position.y / w2, _d_vsOut[idx2].position.z / w2 };
         
         //Calculate edge functions (2d cross products)
         const float e0{ (v1.x - v0.x) * (p.y - v0.y) - (v1.y - v0.y) * (p.x - v0.x) };
@@ -187,12 +210,20 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
             interpolated.position.y = w0_bary * _d_vsOut[idx0].position.y + w1_bary * _d_vsOut[idx1].position.y + w2_bary * _d_vsOut[idx2].position.y;
             interpolated.position.z = w0_bary * _d_vsOut[idx0].position.z + w1_bary * _d_vsOut[idx1].position.z + w2_bary * _d_vsOut[idx2].position.z;
             interpolated.position.w = 1.0f;
-            interpolated.colour.x = w0_bary * _d_vsOut[idx0].colour.x + w1_bary * _d_vsOut[idx1].colour.x + w2_bary * _d_vsOut[idx2].colour.x;
-            interpolated.colour.y = w0_bary * _d_vsOut[idx0].colour.y + w1_bary * _d_vsOut[idx1].colour.y + w2_bary * _d_vsOut[idx2].colour.y;
-            interpolated.colour.z = w0_bary * _d_vsOut[idx0].colour.z + w1_bary * _d_vsOut[idx1].colour.z + w2_bary * _d_vsOut[idx2].colour.z;
-            interpolated.colour.w = w0_bary * _d_vsOut[idx0].colour.w + w1_bary * _d_vsOut[idx1].colour.w + w2_bary * _d_vsOut[idx2].colour.w;
-            
-            _desc.surface.d_pixels[idx] = FragmentShader(_desc, interpolated);
+
+            //Early depth test
+            const float depth{ w0_bary * v0.z + w1_bary * v1.z + w2_bary * v2.z };
+            if (depth < ReadBufferFloat(_desc.depthBuffer, idx))
+            {
+                WriteBufferFloat(_desc.depthBuffer, idx, depth);
+                
+                interpolated.colour.x = w0_bary * _d_vsOut[idx0].colour.x + w1_bary * _d_vsOut[idx1].colour.x + w2_bary * _d_vsOut[idx2].colour.x;
+                interpolated.colour.y = w0_bary * _d_vsOut[idx0].colour.y + w1_bary * _d_vsOut[idx1].colour.y + w2_bary * _d_vsOut[idx2].colour.y;
+                interpolated.colour.z = w0_bary * _d_vsOut[idx0].colour.z + w1_bary * _d_vsOut[idx1].colour.z + w2_bary * _d_vsOut[idx2].colour.z;
+                interpolated.colour.w = w0_bary * _d_vsOut[idx0].colour.w + w1_bary * _d_vsOut[idx1].colour.w + w2_bary * _d_vsOut[idx2].colour.w;
+                
+                _desc.surface.d_pixels[idx] = FragmentShader(_desc, interpolated);
+            }
         }
     }
 }
