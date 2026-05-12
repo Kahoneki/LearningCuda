@@ -148,9 +148,8 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
     
     
     //Loop through all indices in the index buffer and shade triangles
-    const float aspectRatio{ static_cast<float>(_desc.surface.width) / static_cast<float>(_desc.surface.height) };
-    const float2 p{ u * aspectRatio, v };
-    
+    const float2 p{ u, v };
+
     for (std::size_t i{ 0 }; i < _desc.indexBuffer.count; i += 3)
     {
         //Get vertex positions
@@ -161,7 +160,7 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
         const float w0{ _d_vsOut[idx0].position.w };
         const float w1{ _d_vsOut[idx1].position.w };
         const float w2{ _d_vsOut[idx2].position.w };
-        if (w0 == 0.0f || w1 == 0.0f || w2 == 0.0f) { continue; }
+        if (w0 <= 0.0f || w1 <= 0.0f || w2 <= 0.0f) { continue; }
         
         const float2 v0{ _d_vsOut[idx0].position.x / w0, _d_vsOut[idx0].position.y / w0 };
         const float2 v1{ _d_vsOut[idx1].position.x / w1, _d_vsOut[idx1].position.y / w1 };
