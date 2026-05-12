@@ -122,6 +122,7 @@ int main()
     float rotation{ 0.0f };
     constexpr float moveSpeed{ 4.0f };
     constexpr float rotSpeed{ 90.0f };
+    float totalTime{ 0.0f };
     
     Camera camera(45.0f, static_cast<float>(width) / static_cast<float>(height), 0.01f, 100.0f);
     Uint64 lastTime{ SDL_GetPerformanceCounter() };
@@ -135,6 +136,7 @@ int main()
         const Uint64 currentTime{ SDL_GetPerformanceCounter() };
         const float dt{ static_cast<float>(currentTime - lastTime) / static_cast<float>(frequency) };
         lastTime = currentTime;
+        totalTime += dt;
         
         while (SDL_PollEvent(&e))
         {
@@ -143,11 +145,11 @@ int main()
         }
         camera.Update(dt);
         
-        position.x = sin(moveSpeed * currentTime) / 2.0f;
-        rotation = rotSpeed * currentTime;
+        position.x = sin(moveSpeed * totalTime) / 2.0f;
+        rotation = rotSpeed * totalTime;
         glm::mat4 modelMat{ glm::mat4(1.0f) };
-        // modelMat = glm::translate(modelMat, position);
-        // modelMat = glm::rotate(modelMat, glm::radians(rotation), glm::vec3(0,0,1));
+        modelMat = glm::translate(modelMat, position);
+        modelMat = glm::rotate(modelMat, glm::radians(rotation), glm::vec3(1,1,1));
         renderDesc.pushConstants.modelMatrix = modelMat;
         renderDesc.pushConstants.viewProjMatrix = camera.GetProjMatrix() * camera.GetViewMatrix();
         
