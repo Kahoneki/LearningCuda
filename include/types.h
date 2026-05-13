@@ -75,5 +75,9 @@ struct RenderDesc
     
     Buffer depthBuffer;
     
+    Buffer texture;
+    std::uint32_t textureWidth;
+    std::uint32_t textureHeight;
+    
     PushConstants pushConstants;
 };

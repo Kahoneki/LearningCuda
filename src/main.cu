@@ -3,6 +3,7 @@
 #include "kernel.h"
 #include <SDL2/SDL.h>
 #include <iostream>
+#include <stb_image.h>
 
 
 #define CUDA_CHECK(call)                                                                                                    \
@@ -23,6 +24,7 @@ struct Vertex
 {
     glm::vec3 pos;
     glm::vec3 color;
+    glm::vec2 uv;
 };
 
 
@@ -61,40 +63,40 @@ int main()
     Vertex h_vb[24]
     {
         //--- Forwards Face (Z = +0.5) - Red ---
-        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //0
-        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //1
-        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //2
-        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f) }, //3
+        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f) }, //0
+        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f) }, //1
+        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f) }, //2
+        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f) }, //3
 
         //--- Backwards Face (Z = -0.5) - Green ---
-        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //4
-        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //5
-        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //6
-        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) }, //7
+        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f) }, //4
+        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f) }, //5
+        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f) }, //6
+        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f) }, //7
 
         //--- Top Face (Y = +0.5) - Blue ---
-        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f) }, //8
-        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f) }, //9
-        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, 1.0f) }, //10
-        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, 1.0f) }, //11
+        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f) }, //8
+        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f) }, //9
+        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f) }, //10
+        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f) }, //11
 
         //--- Bottom Face (Y = -0.5) - Yellow ---
-        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 1.0f, 0.0f) }, //12
-        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 1.0f, 0.0f) }, //13
-        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 1.0f, 0.0f) }, //14
-        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 1.0f, 0.0f) }, //15
+        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f) }, //12
+        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f) }, //13
+        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f) }, //14
+        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f) }, //15
 
         //--- Right Face (X = +0.5) - Magenta ---
-        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 1.0f) }, //16
-        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 1.0f) }, //17
-        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 1.0f) }, //18
-        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 1.0f) }, //19
+        { glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f) }, //16
+        { glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f) }, //17
+        { glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f) }, //18
+        { glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f) }, //19
 
         //--- Left Face (X = -0.5) - Cyan ---
-        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 1.0f) }, //20
-        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 1.0f) }, //21
-        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 1.0f) }, //22
-        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 1.0f) }  //23
+        { glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 0.0f) }, //20
+        { glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f) }, //21
+        { glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f) }, //22
+        { glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f) }  //23
     };
     CC(cudaMalloc(&renderDesc.vertexBuffer.d_data, renderDesc.vertexBuffer.count * sizeof(Vertex)));
     CC(cudaMemcpy(renderDesc.vertexBuffer.d_data, h_vb, renderDesc.vertexBuffer.count * sizeof(Vertex), cudaMemcpyHostToDevice));
@@ -102,6 +104,7 @@ int main()
     VertexLayout layout{};
     layout.attributes[0] = { 0, AttributeFormat::FLOAT3 };
     layout.attributes[1] = { sizeof(glm::vec3), AttributeFormat::FLOAT3 };
+    layout.attributes[2] = { sizeof(glm::vec3) * 2, AttributeFormat::FLOAT2 };
     renderDesc.vertexLayout = layout;
     
     //Index buffer (CW winding)
@@ -134,10 +137,27 @@ int main()
     float totalTime{ 0.0f };
     
     Camera camera(45.0f, static_cast<float>(width) / static_cast<float>(height), 0.01f, 100.0f);
-    Uint64 lastTime{ SDL_GetPerformanceCounter() };
-    Uint64 frequency{ SDL_GetPerformanceFrequency() };
+    
+    
+    stbi_set_flip_vertically_on_load(true);
+    int imgWidth, imgHeight, imgChannels;
+    unsigned char* pixels{ stbi_load("resources/textures/image.png", &imgWidth, &imgHeight, &imgChannels, 4) };
+    if (pixels == nullptr)
+    {
+        std::cerr << "Failed to load image: " << stbi_failure_reason() << std::endl;
+    }
+    renderDesc.texture.count = imgWidth * imgHeight;
+    renderDesc.texture.size = 4 * sizeof(unsigned char);
+    renderDesc.texture.stride = 4 * sizeof(unsigned char);
+    renderDesc.textureWidth = imgWidth;
+    renderDesc.textureHeight = imgHeight;
+    CC(cudaMalloc(&renderDesc.texture.d_data, renderDesc.texture.count * renderDesc.texture.size));
+    CC(cudaMemcpy(renderDesc.texture.d_data, pixels, renderDesc.texture.count * renderDesc.texture.size, cudaMemcpyHostToDevice));
+    
     
     //Main loop
+    Uint64 lastTime{ SDL_GetPerformanceCounter() };
+    Uint64 frequency{ SDL_GetPerformanceFrequency() };
     bool running{ true };
     SDL_Event e;
     while (running)
@@ -191,7 +211,7 @@ int main()
     CC(cudaFree(renderDesc.depthBuffer.d_data));
     CC(cudaFree(renderDesc.vertexBuffer.d_data));
     CC(cudaFree(renderDesc.indexBuffer.d_data));
-    CC(cudaFree(d_pixels));
+    stbi_image_free(pixels);
     SDL_DestroyWindow(window);
     SDL_Quit();
     

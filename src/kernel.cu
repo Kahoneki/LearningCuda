@@ -59,6 +59,19 @@ __device__ void WriteBufferFloat(const Buffer& _buffer, const std::size_t _index
 
 
 
+__device__ uchar4 ReadBufferUchar4(const Buffer& _buffer, const std::size_t _index)
+{
+    const unsigned char* bytes{ static_cast<const unsigned char*>(_buffer.d_data) };
+    const std::size_t byteOffset{ _index * _buffer.stride };
+    if (_buffer.size == 4)
+    {
+        return *reinterpret_cast<const uchar4*>(bytes + byteOffset);
+    }
+    return uchar4(0u,0u,0u,0u);
+}
+
+
+
 __device__ glm::vec4 ReadVertexAttribute(const Buffer& _buffer, const VertexLayout& _layout, std::size_t _vertexIndex, std::size_t _attrIndex)
 {
     const unsigned char* bytes = static_cast<const unsigned char*>(_buffer.d_data);
@@ -129,6 +142,7 @@ struct VertexShaderOutput
 {
     glm::vec4 position;
     glm::vec4 colour;
+    glm::vec2 uv;
 };
 
 __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsOut)
@@ -141,16 +155,23 @@ __global__ void kVertexShader(const RenderDesc& _desc, VertexShaderOutput* d_vsO
     pos.w = 1.0f;
     d_vsOut[vertexIndex].position = _desc.pushConstants.viewProjMatrix * _desc.pushConstants.modelMatrix * pos;
     d_vsOut[vertexIndex].colour = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 1);
+    d_vsOut[vertexIndex].uv = ReadVertexAttribute(_desc.vertexBuffer, _desc.vertexLayout, vertexIndex, 2);
 }
 
 
 
-__device__ uchar4 FragmentShader(const RenderDesc& _desc, const VertexShaderOutput& _input)
+__device__ uchar4 kFragmentShader(const RenderDesc& _desc, const VertexShaderOutput& _input, const std::size_t _idx)
 {
-    const unsigned char r{ static_cast<unsigned char>(_input.colour.z * 255.0f) };
-    const unsigned char g{ static_cast<unsigned char>(_input.colour.y * 255.0f) };
-    const unsigned char b{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
-    return uchar4{ r, g, b, 255u };
+    // const unsigned char r{ static_cast<unsigned char>(_input.colour.z * 255.0f) };
+    // const unsigned char g{ static_cast<unsigned char>(_input.colour.y * 255.0f) };
+    // const unsigned char b{ static_cast<unsigned char>(_input.colour.x * 255.0f) };
+    // return uchar4{ r, g, b, 255u };
+    
+    const int texX{ static_cast<int>(_input.uv.x * (_desc.textureWidth - 1)) };
+    const int texY{ static_cast<int>(_input.uv.y * (_desc.textureHeight - 1)) };
+    const std::size_t texIdx{ texY * _desc.textureWidth + texX };
+    const uchar4 colour{ ReadBufferUchar4(_desc.texture, texIdx) };
+    return { colour.z, colour.y, colour.x, colour.w };
 }
 
 
@@ -216,13 +237,35 @@ __global__ void kRasterise(const RenderDesc& _desc, VertexShaderOutput* _d_vsOut
             if (depth < ReadBufferFloat(_desc.depthBuffer, idx))
             {
                 WriteBufferFloat(_desc.depthBuffer, idx, depth);
+    
+                const float oneOverW0 = 1.0f / w0;
+                const float oneOverW1 = 1.0f / w1;
+                const float oneOverW2 = 1.0f / w2;
+    
+                const float oneOverW = w0_bary * oneOverW0 + w1_bary * oneOverW1 + w2_bary * oneOverW2;
+                const float w = 1.0f / oneOverW;
+    
+                interpolated.uv.x = (w0_bary * _d_vsOut[idx0].uv.x * oneOverW0 + 
+                                     w1_bary * _d_vsOut[idx1].uv.x * oneOverW1 + 
+                                     w2_bary * _d_vsOut[idx2].uv.x * oneOverW2) * w;
+                interpolated.uv.y = (w0_bary * _d_vsOut[idx0].uv.y * oneOverW0 + 
+                                     w1_bary * _d_vsOut[idx1].uv.y * oneOverW1 + 
+                                     w2_bary * _d_vsOut[idx2].uv.y * oneOverW2) * w;
+    
+                interpolated.colour.x = (w0_bary * _d_vsOut[idx0].colour.x * oneOverW0 + 
+                                         w1_bary * _d_vsOut[idx1].colour.x * oneOverW1 + 
+                                         w2_bary * _d_vsOut[idx2].colour.x * oneOverW2) * w;
+                interpolated.colour.y = (w0_bary * _d_vsOut[idx0].colour.y * oneOverW0 + 
+                                         w1_bary * _d_vsOut[idx1].colour.y * oneOverW1 + 
+                                         w2_bary * _d_vsOut[idx2].colour.y * oneOverW2) * w;
+                interpolated.colour.z = (w0_bary * _d_vsOut[idx0].colour.z * oneOverW0 + 
+                                         w1_bary * _d_vsOut[idx1].colour.z * oneOverW1 + 
+                                         w2_bary * _d_vsOut[idx2].colour.z * oneOverW2) * w;
+                interpolated.colour.w = (w0_bary * _d_vsOut[idx0].colour.w * oneOverW0 + 
+                                         w1_bary * _d_vsOut[idx1].colour.w * oneOverW1 + 
+                                         w2_bary * _d_vsOut[idx2].colour.w * oneOverW2) * w;
                 
-                interpolated.colour.x = w0_bary * _d_vsOut[idx0].colour.x + w1_bary * _d_vsOut[idx1].colour.x + w2_bary * _d_vsOut[idx2].colour.x;
-                interpolated.colour.y = w0_bary * _d_vsOut[idx0].colour.y + w1_bary * _d_vsOut[idx1].colour.y + w2_bary * _d_vsOut[idx2].colour.y;
-                interpolated.colour.z = w0_bary * _d_vsOut[idx0].colour.z + w1_bary * _d_vsOut[idx1].colour.z + w2_bary * _d_vsOut[idx2].colour.z;
-                interpolated.colour.w = w0_bary * _d_vsOut[idx0].colour.w + w1_bary * _d_vsOut[idx1].colour.w + w2_bary * _d_vsOut[idx2].colour.w;
-                
-                _desc.surface.d_pixels[idx] = FragmentShader(_desc, interpolated);
+                _desc.surface.d_pixels[idx] = kFragmentShader(_desc, interpolated, idx);
             }
         }
     }
